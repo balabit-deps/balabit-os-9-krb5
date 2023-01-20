@@ -8,7 +8,8 @@ Build-Depends: debhelper-compat (= 13), byacc | bison,
  libverto-dev (>= 0.2.4), pkg-config
 Build-Depends-Indep: python3, python3-cheetah, python3-lxml, python3-sphinx, doxygen, doxygen-latex, tex-gyre
 Standards-Version: 4.6.0
-Maintainer: Sam Hartman <hartmans@debian.org>
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: Sam Hartman <hartmans@debian.org>
 Uploaders: Russ Allbery <rra@debian.org>, Benjamin Kaduk <kaduk@mit.edu>
 Homepage: http://web.mit.edu/kerberos/
 VCS-Git: https://salsa.debian.org/debian/krb5
