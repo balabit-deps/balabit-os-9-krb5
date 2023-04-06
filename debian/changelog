@@ -1,3 +1,10 @@
+krb5 (1.19.2-2ubuntu0.2) jammy; urgency=medium
+
+  * d/kdc.conf: Do not specify master key type to avoid weak crypto for
+    new realms. Existing realms will not be changed. (LP: #1981697)
+
+ -- Andreas Hasenack <andreas@canonical.com>  Thu, 06 Apr 2023 19:21:06 -0300
+
 krb5 (1.19.2-2ubuntu0.1) jammy-security; urgency=medium
 
   * SECURITY UPDATE: Integer overflow
