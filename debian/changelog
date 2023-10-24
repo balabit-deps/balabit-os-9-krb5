@@ -1,3 +1,12 @@
+krb5 (1.19.2-2ubuntu0.3) jammy-security; urgency=medium
+
+  * SECURITY UPDATE: freeing of uninitialized memory
+    - debian/patches/CVE-2023-36054.patch: ensure array count consistency in
+      kadm5 RPC.
+    - CVE-2023-36054
+
+ -- Camila Camargo de Matos <camila.camargodematos@canonical.com>  Tue, 24 Oct 2023 13:59:06 -0300
+
 krb5 (1.19.2-2ubuntu0.2) jammy; urgency=medium
 
   * d/kdc.conf: Do not specify master key type to avoid weak crypto for
