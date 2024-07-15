@@ -1,3 +1,13 @@
+krb5 (1.19.2-2ubuntu0.4) jammy-security; urgency=medium
+
+  * SECURITY UPDATE: Invalid token requests
+    - debian/patches/CVE-2024-37370.patch: Fix vulnerabilities in GSS
+    message token handling
+    - CVE-2024-37370
+    - CVE-2024-37371
+
+ -- Bruce Cable <bruce.cable@canonical.com>  Mon, 15 Jul 2024 13:46:10 +1000
+
 krb5 (1.19.2-2ubuntu0.3) jammy-security; urgency=medium
 
   * SECURITY UPDATE: freeing of uninitialized memory
