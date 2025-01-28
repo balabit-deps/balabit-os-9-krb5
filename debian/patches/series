@@ -12,3 +12,4 @@ debian-local/0008-Use-isystem-for-include-paths.patch
 CVE-2022-42898.patch
 CVE-2023-36054.patch
 CVE-2024-37370.patch
+CVE-2024-3596.patch
