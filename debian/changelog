@@ -1,3 +1,17 @@
+krb5 (1.19.2-2ubuntu0.6) jammy-security; urgency=medium
+
+  * SECURITY UPDATE: denial of service via two memory leaks
+    - debian/patches/CVE-2024-26458.patch: fix two unlikely memory leaks in
+      src/lib/gssapi/krb5/k5sealv3.c, src/lib/rpc/pmap_rmt.c.
+    - CVE-2024-26458
+    - CVE-2024-26461
+  * SECURITY UPDATE: kadmind DoS via iprop log file
+    - debian/patches/CVE-2025-24528.patch: prevent overflow when
+      calculating ulog block size in src/lib/kdb/kdb_log.c.
+    - CVE-2025-24528
+
+ -- Marc Deslauriers <marc.deslauriers@ubuntu.com>  Tue, 25 Feb 2025 12:26:06 -0500
+
 krb5 (1.19.2-2ubuntu0.5) jammy-security; urgency=medium
 
   * SECURITY UPDATE: Use of MD5-based message authentication over plaintext
