@@ -1,3 +1,17 @@
+krb5 (1.19.2-2ubuntu0.7) jammy-security; urgency=medium
+
+  * SECURITY UPDATE: Use of weak cryptographic hash.
+    - debian/patches/CVE-2025-3576.patch: Add allow_des3 and allow_rc4 options.
+      Disallow usage of des3 and rc4 unless allowed in the config. Replace
+      warn_des3 with warn_deprecated in ./src/lib/krb5/krb/get_in_tkt.c. Add
+      allow_des3 and allow_rc4 boolean in ./src/include/k5-int.h. Prevent usage
+      of deprecated enctypes in ./src/kdc/kdc_util.c.
+    - debian/patches/CVE-2025-3576-post1.patch: Add enctype comparison with
+      ENCTYPE_AES256_CTS_HMAC_SHA1_96 in ./src/kdc/kdc_util.c.
+    - CVE-2025-3576
+
+ -- Hlib Korzhynskyy <hlib.korzhynskyy@canonical.com>  Thu, 15 May 2025 12:06:20 +0200
+
 krb5 (1.19.2-2ubuntu0.6) jammy-security; urgency=medium
 
   * SECURITY UPDATE: denial of service via two memory leaks
