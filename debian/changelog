@@ -1,3 +1,17 @@
+krb5 (1.19.2-2ubuntu0.8) jammy-security; urgency=medium
+
+  * SECURITY UPDATE: nteger underflow berval2tl_data()
+    - debian/patches/CVE-2026-11850.patch: Prevent read overrun in libkdb_ldap
+      in src/plugins/kdb/ldap/libkdb_ldap/ldap_principal2.c.
+    - CVE-2026-11850
+  * SECURITY UPDATE: security issues in the NegoEx mechanism
+    - debian/patches/CVE-2026-4035x.patch: Fix two NegoEx parsing
+      vulnerabilities in src/lib/gssapi/spnego/negoex_util.c.
+    - CVE-2026-40355
+    - CVE-2026-40356
+
+ -- Marc Deslauriers <marc.deslauriers@ubuntu.com>  Wed, 15 Jul 2026 14:26:34 -0400
+
 krb5 (1.19.2-2ubuntu0.7) jammy-security; urgency=medium
 
   * SECURITY UPDATE: Use of weak cryptographic hash.
