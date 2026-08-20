@@ -1,3 +1,21 @@
+krb5 (1.19.2-2ubuntu0.10) jammy; urgency=medium
+
+  * d/t/control: Don't run kinit-pwexpire on 32-bit architectures
+    The test verifies correct behavior for dates in the far future
+    (~70 years after the time of test), which krb5's date parser
+    only accepts on 64 bit arches.
+
+ -- Grayson Wolf <grayson.wolf@canonical.com>  Thu, 20 Aug 2026 09:08:02 -0400
+
+krb5 (1.19.2-2ubuntu0.9) jammy; urgency=medium
+
+  * d/p/0012-lp2162744-ts-interval.patch: Add ts_interval to accomodate
+    for large time intervals (LP: #2162744)
+  * d/t/kinit-pwexpire: Add test that long PW expiry dates
+    do not overflow and produce wrong messages.
+
+ -- Grayson Wolf <grayson.wolf@canonical.com>  Tue, 11 Aug 2026 17:34:22 -0400
+
 krb5 (1.19.2-2ubuntu0.8) jammy-security; urgency=medium
 
   * SECURITY UPDATE: nteger underflow berval2tl_data()

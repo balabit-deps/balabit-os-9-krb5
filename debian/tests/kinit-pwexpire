@@ -1,0 +1,34 @@
+#!/bin/sh
+
+set -ex
+
+. debian/tests/util
+
+TEST_REALM="EXAMPLE.INTERNAL"
+MYHOSTNAME="krb5-dep8.internal"
+adjust_hostname "${MYHOSTNAME}"
+
+create_realm "${TEST_REALM}" "${MYHOSTNAME}"
+
+principal="testuser$$"
+
+# 70 years in the future ~ 2.2 billion seconds > 2^31 - 1 seconds
+# Thus, this expiry date would trigger signed integer overflow
+# and might produce an erroneous expiry date if the patch isn't
+# applied
+pwexp="$(date -u -d '+70 years' '+%Y-%m-%d %H:%M:%S UTC')"
+kadmin.local -q "addprinc -pw secret -pwexpire \"${pwexp}\" ${principal}"
+
+out="$(echo secret | kinit "${principal}" 2>/dev/null)"
+
+# did we really get a ticket?
+klist | grep "krbtgt/${TEST_REALM}@${TEST_REALM}"
+
+if echo "${out}" | grep -q "will expire"; then
+    echo "FAIL: erroneous password-expiry warning emitted:" >&2
+    echo "${out}" >&2
+    exit 1
+fi
+
+kdestroy
+kadmin.local -q "delprinc -force ${principal}"

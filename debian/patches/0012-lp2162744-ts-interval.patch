@@ -1,0 +1,278 @@
+From 29600cf1db888d91c42cbd6cf72652afe8c1ee66 Mon Sep 17 00:00:00 2001
+From: Greg Hudson <ghudson@mit.edu>
+Date: Mon, 19 Sep 2022 15:18:50 -0400
+Subject: [PATCH] Add and use ts_interval() helper
+
+ts_delta() returns a signed result, which cannot hold an interval
+larger than 2^31-1 seconds.  Intervals like this have been seen when
+admins set password expiration dates more than 68 years in the future.
+
+Add a second helper ts_interval() which returns an unsigned result,
+and has the arguments reversed so that the start time is first.  Use
+it in warn_pw_expiry() to handle the password expiration case, in the
+GSS krb5 mech where we return an unsigned context or credential
+lifetime to the caller, and in the KEYRING ccache type where we
+compute an unsigned keyring timeout.
+
+ticket: 9071 (new)
+Origin: upstream, https://github.com/krb5/krb5/commit/29600cf1db888d91c42cbd6cf72652afe8c1ee66
+Bug: https://krbdev.mit.edu/rt/Ticket/Display.html?id=9071
+Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/krb5/+bug/2162744
+---
+ src/include/k5-int.h                     |  9 +++++++++
+ src/lib/gssapi/krb5/accept_sec_context.c | 10 ++++++----
+ src/lib/gssapi/krb5/acquire_cred.c       |  3 +--
+ src/lib/gssapi/krb5/context_time.c       | 20 ++++++--------------
+ src/lib/gssapi/krb5/init_sec_context.c   |  4 ++--
+ src/lib/gssapi/krb5/inq_context.c        | 11 ++++-------
+ src/lib/gssapi/krb5/inq_cred.c           |  2 +-
+ src/lib/gssapi/krb5/s4u_gss_glue.c       |  2 +-
+ src/lib/krb5/ccache/cc_keyring.c         |  4 ++--
+ src/lib/krb5/krb/get_in_tkt.c            | 15 +++++++--------
+ 10 files changed, 39 insertions(+), 41 deletions(-)
+
+diff --git a/src/include/k5-int.h b/src/include/k5-int.h
+index 44dc1eeb3f8..1d1c8293f40 100644
+--- a/src/include/k5-int.h
++++ b/src/include/k5-int.h
+@@ -2324,6 +2324,15 @@ ts_delta(krb5_timestamp a, krb5_timestamp b)
+     return (krb5_deltat)((uint32_t)a - (uint32_t)b);
+ }
+ 
++/* Return (end - start) as an unsigned 32-bit value, or 0 if start > end. */
++static inline uint32_t
++ts_interval(krb5_timestamp start, krb5_timestamp end)
++{
++    if ((uint32_t)start > (uint32_t)end)
++        return 0;
++    return (uint32_t)end - (uint32_t)start;
++}
++
+ /* Increment a timestamp by a signed 32-bit interval, without relying on
+  * undefined behavior. */
+ static inline krb5_timestamp
+diff --git a/src/lib/gssapi/krb5/accept_sec_context.c b/src/lib/gssapi/krb5/accept_sec_context.c
+index d4e90793f95..44c056afd97 100644
+--- a/src/lib/gssapi/krb5/accept_sec_context.c
++++ b/src/lib/gssapi/krb5/accept_sec_context.c
+@@ -353,8 +353,8 @@ kg_accept_dce(minor_status, context_handle, verifier_cred_handle,
+         *mech_type = ctx->mech_used;
+ 
+     if (time_rec) {
+-        *time_rec = ts_delta(ctx->krb_times.endtime, now) +
+-            ctx->k5_context->clockskew;
++        *time_rec = ts_interval(ts_incr(now, -ctx->k5_context->clockskew),
++                                ctx->krb_times.endtime);
+     }
+ 
+     /* Never return GSS_C_DELEG_FLAG since we don't support DCE credential
+@@ -1152,8 +1152,10 @@ kg_accept_krb5(minor_status, context_handle,
+ 
+     /* Add the maximum allowable clock skew as a grace period for context
+      * expiration, just as we do for the ticket. */
+-    if (time_rec)
+-        *time_rec = ts_delta(ctx->krb_times.endtime, now) + context->clockskew;
++    if (time_rec) {
++        *time_rec = ts_interval(ts_incr(now, -context->clockskew),
++                                ctx->krb_times.endtime);
++    }
+ 
+     if (ret_flags)
+         *ret_flags = ctx->gss_flags;
+diff --git a/src/lib/gssapi/krb5/acquire_cred.c b/src/lib/gssapi/krb5/acquire_cred.c
+index e226a02692d..006eba114df 100644
+--- a/src/lib/gssapi/krb5/acquire_cred.c
++++ b/src/lib/gssapi/krb5/acquire_cred.c
+@@ -879,8 +879,7 @@ acquire_cred_context(krb5_context context, OM_uint32 *minor_status,
+                                   GSS_C_NO_NAME);
+             if (GSS_ERROR(ret))
+                 goto error_out;
+-            *time_rec = ts_after(cred->expire, now) ?
+-                ts_delta(cred->expire, now) : 0;
++            *time_rec = ts_interval(now, cred->expire);
+             k5_mutex_unlock(&cred->lock);
+         }
+     }
+diff --git a/src/lib/gssapi/krb5/context_time.c b/src/lib/gssapi/krb5/context_time.c
+index 1fdb5a16f2b..226de05f515 100644
+--- a/src/lib/gssapi/krb5/context_time.c
++++ b/src/lib/gssapi/krb5/context_time.c
+@@ -35,8 +35,7 @@ krb5_gss_context_time(minor_status, context_handle, time_rec)
+ {
+     krb5_error_code code;
+     krb5_gss_ctx_id_rec *ctx;
+-    krb5_timestamp now;
+-    krb5_deltat lifetime;
++    krb5_timestamp now, start;
+ 
+     ctx = (krb5_gss_ctx_id_rec *) context_handle;
+ 
+@@ -51,16 +50,9 @@ krb5_gss_context_time(minor_status, context_handle, time_rec)
+         return(GSS_S_FAILURE);
+     }
+ 
+-    lifetime = ts_delta(ctx->krb_times.endtime, now);
+-    if (!ctx->initiate)
+-        lifetime += ctx->k5_context->clockskew;
+-    if (lifetime <= 0) {
+-        *time_rec = 0;
+-        *minor_status = 0;
+-        return(GSS_S_CONTEXT_EXPIRED);
+-    } else {
+-        *time_rec = lifetime;
+-        *minor_status = 0;
+-        return(GSS_S_COMPLETE);
+-    }
++    /* Add the maximum allowable clock skew for acceptor contexts. */
++    start = ctx->initiate ? now : ts_incr(now, -ctx->k5_context->clockskew);
++    *time_rec = ts_interval(start, ctx->krb_times.endtime);
++    *minor_status = 0;
++    return (*time_rec == 0) ? GSS_S_CONTEXT_EXPIRED : GSS_S_COMPLETE;
+ }
+diff --git a/src/lib/gssapi/krb5/init_sec_context.c b/src/lib/gssapi/krb5/init_sec_context.c
+index ea87cf6432e..f0f094ccb7b 100644
+--- a/src/lib/gssapi/krb5/init_sec_context.c
++++ b/src/lib/gssapi/krb5/init_sec_context.c
+@@ -664,7 +664,7 @@ kg_new_connection(
+     if (time_rec) {
+         if ((code = krb5_timeofday(context, &now)))
+             goto cleanup;
+-        *time_rec = ts_delta(ctx->krb_times.endtime, now);
++        *time_rec = ts_interval(now, ctx->krb_times.endtime);
+     }
+ 
+     /* set the other returns */
+@@ -878,7 +878,7 @@ mutual_auth(
+     if (time_rec) {
+         if ((code = krb5_timeofday(context, &now)))
+             goto fail;
+-        *time_rec = ts_delta(ctx->krb_times.endtime, now);
++        *time_rec = ts_interval(now, ctx->krb_times.endtime);
+     }
+ 
+     if (ret_flags)
+diff --git a/src/lib/gssapi/krb5/inq_context.c b/src/lib/gssapi/krb5/inq_context.c
+index cac024da1f0..51be20252ef 100644
+--- a/src/lib/gssapi/krb5/inq_context.c
++++ b/src/lib/gssapi/krb5/inq_context.c
+@@ -95,8 +95,8 @@ krb5_gss_inquire_context(minor_status, context_handle, initiator_name,
+     krb5_error_code code;
+     krb5_gss_ctx_id_rec *ctx;
+     krb5_gss_name_t initiator, acceptor;
+-    krb5_timestamp now;
+-    krb5_deltat lifetime;
++    krb5_timestamp now, start;
++    OM_uint32 lifetime;
+ 
+     if (initiator_name)
+         *initiator_name = (gss_name_t) NULL;
+@@ -120,11 +120,8 @@ krb5_gss_inquire_context(minor_status, context_handle, initiator_name,
+ 
+         /* Add the maximum allowable clock skew as a grace period for context
+          * expiration, just as we do for the ticket during authentication. */
+-        lifetime = ts_delta(ctx->krb_times.endtime, now);
+-        if (!ctx->initiate)
+-            lifetime += context->clockskew;
+-        if (lifetime < 0)
+-            lifetime = 0;
++        start = ctx->initiate ? now : ts_incr(now, -context->clockskew);
++        lifetime = ts_interval(start, ctx->krb_times.endtime);
+ 
+         if (initiator_name) {
+             code = kg_duplicate_name(context,
+diff --git a/src/lib/gssapi/krb5/inq_cred.c b/src/lib/gssapi/krb5/inq_cred.c
+index bb63b726c88..0e675959a34 100644
+--- a/src/lib/gssapi/krb5/inq_cred.c
++++ b/src/lib/gssapi/krb5/inq_cred.c
+@@ -131,7 +131,7 @@ krb5_gss_inquire_cred(minor_status, cred_handle, name, lifetime_ret,
+     }
+ 
+     if (cred->expire != 0) {
+-        lifetime = ts_delta(cred->expire, now);
++        lifetime = ts_interval(now, cred->expire);
+         if (lifetime < 0)
+             lifetime = 0;
+     }
+diff --git a/src/lib/gssapi/krb5/s4u_gss_glue.c b/src/lib/gssapi/krb5/s4u_gss_glue.c
+index 7dcfe4e1eb6..fa7f980af70 100644
+--- a/src/lib/gssapi/krb5/s4u_gss_glue.c
++++ b/src/lib/gssapi/krb5/s4u_gss_glue.c
+@@ -279,7 +279,7 @@ kg_compose_deleg_cred(OM_uint32 *minor_status,
+         if (code != 0)
+             goto cleanup;
+ 
+-        *time_rec = ts_delta(cred->expire, now);
++        *time_rec = ts_interval(now, cred->expire);
+     }
+ 
+     major_status = GSS_S_COMPLETE;
+diff --git a/src/lib/krb5/ccache/cc_keyring.c b/src/lib/krb5/ccache/cc_keyring.c
+index ebef37d6076..1dadeef64fd 100644
+--- a/src/lib/krb5/ccache/cc_keyring.c
++++ b/src/lib/krb5/ccache/cc_keyring.c
+@@ -762,7 +762,7 @@ update_keyring_expiration(krb5_context context, krb5_ccache id)
+ 
+     /* Setting the timeout to zero would reset the timeout, so we set it to one
+      * second instead if creds are already expired. */
+-    timeout = ts_after(endtime, now) ? ts_delta(endtime, now) : 1;
++    timeout = ts_after(endtime, now) ? ts_interval(now, endtime) : 1;
+     (void)keyctl_set_timeout(data->cache_id, timeout);
+ }
+ 
+@@ -1343,7 +1343,7 @@ krcc_store(krb5_context context, krb5_ccache id, krb5_creds *creds)
+ 
+     if (ts_after(creds->times.endtime, now)) {
+         (void)keyctl_set_timeout(cred_key,
+-                                 ts_delta(creds->times.endtime, now));
++                                 ts_interval(now, creds->times.endtime));
+     }
+ 
+     update_keyring_expiration(context, id);
+diff --git a/src/lib/krb5/krb/get_in_tkt.c b/src/lib/krb5/krb/get_in_tkt.c
+index 8b5ab595e95..1b420a3ac26 100644
+--- a/src/lib/krb5/krb/get_in_tkt.c
++++ b/src/lib/krb5/krb/get_in_tkt.c
+@@ -1522,7 +1522,7 @@ warn_pw_expiry(krb5_context context, krb5_get_init_creds_opt *options,
+     void *expire_data;
+     krb5_timestamp pw_exp, acct_exp, now;
+     krb5_boolean is_last_req;
+-    krb5_deltat delta;
++    uint32_t interval;
+     char ts[256], banner[1024];
+ 
+     if (as_reply == NULL || as_reply->enc_part2 == NULL)
+@@ -1553,8 +1553,8 @@ warn_pw_expiry(krb5_context context, krb5_get_init_creds_opt *options,
+     ret = krb5_timeofday(context, &now);
+     if (ret != 0)
+         return;
+-    if (!is_last_req &&
+-        (ts_after(now, pw_exp) || ts_delta(pw_exp, now) > 7 * 24 * 60 * 60))
++    interval = ts_interval(now, pw_exp);
++    if (!is_last_req && (!interval || interval > 7 * 24 * 60 * 60))
+         return;
+ 
+     if (!prompter)
+@@ -1564,19 +1564,18 @@ warn_pw_expiry(krb5_context context, krb5_get_init_creds_opt *options,
+     if (ret != 0)
+         return;
+ 
+-    delta = ts_delta(pw_exp, now);
+-    if (delta < 3600) {
++    if (interval < 3600) {
+         snprintf(banner, sizeof(banner),
+                  _("Warning: Your password will expire in less than one hour "
+                    "on %s"), ts);
+-    } else if (delta < 86400 * 2) {
++    } else if (interval < 86400 * 2) {
+         snprintf(banner, sizeof(banner),
+                  _("Warning: Your password will expire in %d hour%s on %s"),
+-                 delta / 3600, delta < 7200 ? "" : "s", ts);
++                 interval / 3600, interval < 7200 ? "" : "s", ts);
+     } else {
+         snprintf(banner, sizeof(banner),
+                  _("Warning: Your password will expire in %d days on %s"),
+-                 delta / 86400, ts);
++                 interval / 86400, ts);
+     }
+ 
+     /* PROMPTER_INVOCATION */

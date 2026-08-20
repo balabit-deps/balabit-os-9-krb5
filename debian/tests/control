@@ -2,6 +2,11 @@ Tests: kinit
 Depends: @
 Restrictions: isolation-container, needs-root, allow-stderr
 
+Tests: kinit-pwexpire
+Depends: @
+Architecture: !i386 !armhf
+Restrictions: isolation-container, needs-root, allow-stderr
+
 Tests: slapd-gssapi
 Depends: @, slapd, ldap-utils, libsasl2-modules-gssapi-mit
 Restrictions: isolation-container, needs-root, allow-stderr
